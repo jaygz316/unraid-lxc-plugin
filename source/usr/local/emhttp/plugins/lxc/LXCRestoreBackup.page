@@ -1,0 +1,66 @@
+Title="Create LXC Container from Backup"
+Markdown="false"
+---
+<?php
+require_once '/usr/local/emhttp/plugins/lxc/include/Settings.php';
+$settings = new Settings();
+
+$started = $var['fsState']=='Started';
+$active_containers = explode("\n", shell_exec("lxc-ls"));
+$container = $_GET['cont'];
+$backup = $_GET['backup'];
+?>
+
+<script>
+  let container = '<?= $container ?>';
+  let backup = '<?= $backup ?>';
+</script>
+<link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
+<script src="/plugins/lxc/js/lxc.js"></script>
+
+<div id="canvas">
+<form method="post" id="fromBackup" autocomplete="off">
+
+<div class="">
+<dl>
+<dt>Container Name:</dt>
+<dd><input type="text" name="contName" pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]+" required></dd>
+</dl>
+</div>
+
+<div class="">
+<dl>
+<dt>Backup Container Name:</dt>
+<dd><input type="text" name="contBackupName" required value="<?= $container ?>" disabled></dd>
+</dl>
+</div>
+
+<div class="">
+<dl>
+<dt>Backup:</dt>
+<dd><input type="text" name="contBackupDate" required value="<?= $backup ?>" disabled></dd>
+</dl>
+</div>
+
+<div class="">
+<dl>
+<dt>Mac Address:</dt>
+  <dd style="display: grid;">
+    <input type="text" name="contMac" required id="mac" style="text-transform:uppercase" value="<?= getNewMacAddress(); ?>">
+    <div id="emac" class="emac">Invalid MAC address</div>
+  </dd>
+</dl>
+</div>
+
+<div class="">
+<dl>
+<dt>Autostart:</dt>
+<dd><input type="checkbox" name="contAutostart" checked></dd>
+</dl>
+</div>
+
+<input type="submit" value="_(Create)_">
+<a href="LXC" class="button">Done</a>
+
+</form>
+</div>
