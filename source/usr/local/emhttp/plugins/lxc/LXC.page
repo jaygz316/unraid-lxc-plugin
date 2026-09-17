@@ -14,7 +14,11 @@ $settings = new Settings();
 $allContainers = getAllContainers();
 $containerNames = [];
 $compareNames = [];
-$container_check = shell_exec('cd ' . $settings->default_path . ' && find . -maxdepth 2 -type f -name "config" -exec dirname {} \; | sed "s/^\.\///"');
+if (!empty($settings->default_path) && is_dir($settings->default_path)) {
+  $container_check = shell_exec('cd ' . escapeshellarg($settings->default_path) . ' 2>/dev/null && find . -maxdepth 2 -type f -name "config" -exec dirname {} \; | sed "s/^\.\///"');
+} else {
+  $container_check = '';
+}
 $container_check = explode("\n", $container_check);
 $cpu_count = shell_exec('nproc --all');
 if (!file_exists('/tmp/lxc/containers')) {
@@ -41,7 +45,7 @@ label+.content {
 }
 </style>
 
-<? if (isset($started ) === true && trim($started ) !== '') { ?>
+<? if (!empty($started)) { ?>
 <? if (count($allContainers) == 0) {
   $container_check = array_filter($container_check);
   if (count($container_check) !== 0) {	
@@ -56,7 +60,7 @@ label+.content {
   echo 'Configuration Path';
   echo '</th>';
   echo '</tr>';
-  echo '<thead>';
+  echo '</thead>';
   echo '<tbody align="left">';
 
   foreach ($container_check as $faulty) {
@@ -70,10 +74,10 @@ label+.content {
     echo ltrim($faulty, './');
     echo '</font>';
     echo '<br>';
-    echo '<span style="font-size:9pt"><i class="fa fa-ban red-text""></i> faulty config</span>';
+    echo '<span style="font-size:9pt"><i class="fa fa-ban red-text"></i> faulty config</span>';
     echo '</span>';
     echo '</td>';
-    echo '<td><a href="#" class="' . ltrim($faulty, './') . '" id="editconfig"><i class="fa fa-edit text"></i> ' . $settings->default_path . '/' . ltrim($faulty, './') . '/config</a><td>';
+    echo '<td><a href="#" class="' . ltrim($faulty, './') . '" id="editconfig"><i class="fa fa-edit text"></i> ' . $settings->default_path . '/' . ltrim($faulty, './') . '/config</a></td>';
   }
   echo '</tr>';
   echo '</tbody>';
@@ -157,11 +161,11 @@ foreach ($allContainers as $container) {
         <span class="hand">
           <?php
             if (file_exists($settings->default_path . '/custom-icons/' . $container->name . '.png')) {
-              echo '<img src="' . $settings->default_path . '/custom-icons/' . $container->name . '.png" class="img" width="30" height="30" class="dropdown_btn" onclick="showDropdown(\'' . $container->name . '\')">';
+              echo '<img src="' . $settings->default_path . '/custom-icons/' . $container->name . '.png" class="img dropdown_btn" width="30" height="30" onclick="showDropdown(\'' . $container->name . '\')">';
             } elseif (file_exists('/usr/local/emhttp/plugins/lxc/images/distributions/' . $container->distribution . '.png')) {
-              echo '<img src="/plugins/lxc/images/distributions/' . $container->distribution . '.png" class="img" width="30" height="30" class="dropdown_btn" onclick="showDropdown(\'' . $container->name . '\')">';
+              echo '<img src="/plugins/lxc/images/distributions/' . $container->distribution . '.png" class="img dropdown_btn" width="30" height="30" onclick="showDropdown(\'' . $container->name . '\')">';
             } else {
-              echo '<img src="/plugins/lxc/images/distributions/question.png" class="img" width="30" height="30" class="dropdown_btn" onclick="showDropdown(\'' . $container->name . '\')">';
+              echo '<img src="/plugins/lxc/images/distributions/question.png" class="img dropdown_btn" width="30" height="30" onclick="showDropdown(\'' . $container->name . '\')">';
             }
           ?>
         </span>
@@ -322,7 +326,7 @@ if (count($differences) > 0) {
   echo 'Configuration Path';
   echo '</th>';
   echo '</tr>';
-  echo '<thead>';
+  echo '</thead>';
   echo '<tbody align="left">';
 
   foreach ($differences as $faulty) {
@@ -339,7 +343,7 @@ if (count($differences) > 0) {
     echo '<span style="font-size:9pt"><i class="fa fa-ban red-text"></i> faulty config</span>';
     echo '</span>';
     echo '</td>';
-    echo '<td><a href="#" class="' . ltrim($faulty, './') . '" id="editconfig"><i class="fa fa-edit text"></i> ' . $settings->default_path . '/' . ltrim($faulty, './') . '/config</a><td>';
+    echo '<td><a href="#" class="' . ltrim($faulty, './') . '" id="editconfig"><i class="fa fa-edit text"></i> ' . $settings->default_path . '/' . ltrim($faulty, './') . '/config</a></td>';
   }
   echo '</tr>';
   echo '</tbody>';

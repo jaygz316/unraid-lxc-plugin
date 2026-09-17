@@ -33,7 +33,7 @@ Backups to keep:
 </blockquote>
 
 Compression Ratio:
-<?php $selectedRatio = (isset($settings->backup_compression) && trim($settings->backup_compression !== '')) ? $settings->backup_compression : "6"; ?>
+<?php $selectedRatio = (isset($settings->backup_compression) && trim((string)$settings->backup_compression) !== '') ? $settings->backup_compression : "6"; ?>
 : <select id="compression_ratio" name="COMPRESSION_RATIO">
   <?php
   for ($i = 0; $i <= 9; $i++) {
@@ -48,8 +48,9 @@ Compression Ratio:
 
 CPU Threads:
 <?php
-  $cpu_threads = shell_exec('nproc');
-  $selectedThreads = (isset($settings->backup_threads) && trim($settings->backup_threads !== '')) ? $settings->backup_threads : intdiv($cpu_threads, 2);
+  $cpu_threads = (int)trim(shell_exec('nproc') ?? '1');
+  if ($cpu_threads < 1) $cpu_threads = 1;
+  $selectedThreads = (isset($settings->backup_threads) && trim((string)$settings->backup_threads) !== '') ? (int)$settings->backup_threads : max(1, intdiv($cpu_threads, 2));
 ?>
 : <select id="cpu_threads" name="CPU_THREADS">
   <?php
@@ -102,16 +103,23 @@ echo '<script>parent.window.location.reload();</script>';
 ?>
 
 <script>
-  $('#backupdir').fileTreeAttach();
+  if (document.getElementById("backupdir")) {
+    $('#backupdir').fileTreeAttach();
+  }
 
-  document.getElementById("backup_enabled").addEventListener("change", function() {
-    if (this.value === "Yes") {
-      document.getElementById("backupdir").required = true;
-      document.getElementById("backupstokeep").required = true;
-    } else {
-      document.getElementById("backupdir").required = false;
-      document.getElementById("backupstokeep").required = false;
-    }
-  });
+  var backupEnabled = document.getElementById("backup_enabled");
+  if (backupEnabled) {
+    backupEnabled.addEventListener("change", function() {
+      var isEnabled = (this.value === "enabled" || this.value === "Yes");
+      var backupDir = document.getElementById("backupdir");
+      var backupKeep = document.getElementById("backupstokeep");
+      if (backupDir) {
+        backupDir.required = isEnabled;
+      }
+      if (backupKeep) {
+        backupKeep.required = isEnabled;
+      }
+    });
+  }
 </script>
 

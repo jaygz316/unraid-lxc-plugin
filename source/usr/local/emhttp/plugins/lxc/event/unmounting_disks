@@ -1,39 +1,78 @@
 #!/bin/bash
-if [ "$(cat /boot/config/plugins/lxc/plugin.cfg | grep -n "^SERVICE=" | cut -d '=' -f2 | sed 's/\"//g')" == "enabled" ]; then
-  CONTAINERS_ACTIVE="$(lxc-ls --active)"
-  LXC_CONT_PATH="$(cat /boot/config/plugins/lxc/lxc.conf | grep -n "^lxc.lxcpath" | cut -d '=' -f2 | sed 's/\"//g')"
-  TIMEOUT="$(cat /boot/config/plugins/lxc/plugin.cfg | grep -n "^TIMEOUT=" | cut -d '=' -f2 | sed 's/\"//g')"
+if [ "$(cat /boot/config/plugins/lxc/plugin.cfg 2>/dev/null | grep -n "^SERVICE=" | cut -d '=' -f2 | sed 's/\"//g')" == "enabled" ]; then
+  CONTAINERS_ACTIVE="$(lxc-ls --active 2>/dev/null)"
+  LXC_CONT_PATH="$(cat /boot/config/plugins/lxc/lxc.conf 2>/dev/null | grep -n "^lxc.lxcpath" | cut -d '=' -f2 | sed 's/\"//g')"
+  TIMEOUT="$(cat /boot/config/plugins/lxc/plugin.cfg 2>/dev/null | grep -n "^TIMEOUT=" | cut -d '=' -f2 | sed 's/\"//g')"
+  STOP_TIMEOUT=${TIMEOUT:=15}
 
   if [ ! -z "${CONTAINERS_ACTIVE}" ]; then
     for container in $CONTAINERS_ACTIVE; do
       logger "LXC: Stopping container '$container'"
-      lxc-stop --timeout=${TIMEOUT:=15} $container & 2>/dev/null
+      lxc-stop --timeout=${STOP_TIMEOUT} "$container" 2>/dev/null &
     done
 
     wait
+
+    # Timeout loop ensuring all containers have stopped
+    WAIT_SEC=0
+    MAX_WAIT=$((STOP_TIMEOUT + 5))
+    while [ -n "$(lxc-ls --active 2>/dev/null)" ] && [ $WAIT_SEC -lt $MAX_WAIT ]; do
+      sleep 1
+      WAIT_SEC=$((WAIT_SEC + 1))
+    done
+
+    # Force kill any lingering containers if still running
+    STILL_ACTIVE="$(lxc-ls --active 2>/dev/null)"
+    if [ ! -z "${STILL_ACTIVE}" ]; then
+      for container in $STILL_ACTIVE; do
+        logger "LXC: Force killing unresponsive container '$container'"
+        lxc-stop -k -n "$container" 2>/dev/null
+      done
+      sleep 1
+    fi
   fi
 
-  logger "LXC: unmounting rootfs from container(s)"
+  logger "LXC: unmounting container mounts and datasets"
+
+  # Cleanly unmount all submounts under LXC_CONT_PATH (reverse sorted so deepest mounts unmount first)
+  if [ -n "${LXC_CONT_PATH}" ] && [ -d "${LXC_CONT_PATH}" ]; then
+    grep -E " ${LXC_CONT_PATH}/" /proc/mounts | awk '{print $2}' | sort -r | while read -r mnt; do
+      if [ -n "$mnt" ] && [ "$mnt" != "${LXC_CONT_PATH}" ]; then
+        logger "LXC: umount $mnt"
+        umount "$mnt" 2>/dev/null || umount -l "$mnt" 2>/dev/null
+      fi
+    done
+  fi
+
+  # Unmount rootfs directories and snapshot rootfs
   ROOTFS_CONT="$(find ${LXC_CONT_PATH} -maxdepth 2 -type d -name "rootfs" 2>/dev/null)"
   ROOTFS_SNAPS="$(find ${LXC_CONT_PATH}/*/snaps -maxdepth 2 -type d -name "rootfs" 2>/dev/null)"
   if [ ! -z "${ROOTFS_CONT}" ]; then
     for rootfscont in $ROOTFS_CONT; do
       logger "LXC: umount $rootfscont"
-      umount $rootfscont 2>/dev/null
+      umount "$rootfscont" 2>/dev/null
     done
   fi
 
   if [ ! -z "${ROOTFS_SNAPS}" ]; then
     for rootfssnaps in $ROOTFS_SNAPS; do
       logger "LXC: umount $rootfssnaps"
-      umount $rootfssnaps 2>/dev/null
+      umount "$rootfssnaps" 2>/dev/null
     done
   fi
-  logger "LXC: rootfs unmounting from container(s) done"
 
+  # Cleanly unmount any active ZFS datasets related to LXC to avoid device busy on pool export/array stop
+  if which zfs >/dev/null 2>&1; then
+    for ds in $(zfs list -H -o name,mounted 2>/dev/null | awk '$2=="yes" && $1~/zfs_lxccontainers/ {print $1}'); do
+      logger "LXC: unmounting ZFS dataset $ds"
+      zfs unmount "$ds" 2>/dev/null || zfs unmount -f "$ds" 2>/dev/null
+    done
+  fi
+
+  logger "LXC: unmounting container mounts and datasets complete"
   sleep 1
 fi
 
-if [ -d /var/cache/lxc ]; then
+if [ -d /var/cache/lxc ] || [ -L /var/cache/lxc ]; then
   rm -rf /var/cache/lxc
 fi

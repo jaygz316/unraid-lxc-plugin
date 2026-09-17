@@ -1,16 +1,35 @@
 #!/bin/bash
 while true
 do
-  TIMESTAMP=$(cat /tmp/lxc/containers/active)
-  if [ $(($(date +%s) -$TIMESTAMP)) -gt 15 ]; then
+  TIMESTAMP=$(cat /tmp/lxc/containers/active 2>/dev/null)
+  if [ -z "$TIMESTAMP" ] || [ $(($(date +%s) - TIMESTAMP)) -gt 15 ]; then
     break
   else
     USAGE1=$(awk '/usage_usec/ {print $2}' /sys/fs/cgroup/lxc.payload.${1}/cpu.stat 2>/dev/null)
     sleep 1
     USAGE2=$(awk '/usage_usec/ {print $2}' /sys/fs/cgroup/lxc.payload.${1}/cpu.stat 2>/dev/null)
-    USAGE=$((($USAGE2 - $USAGE1) / 10000))
-    BYTES=$(grep -Ew "anon|kernel|kernel_stack|pagetables|sec_pagetables|percpu|sock|vmalloc|shmem" <<< $(lxc-cgroup -n ${1} memory.stat 2>/dev/null) | awk '{sum += $2} END {print sum}')
-    if [ -z "${BYTES}" ] || [ ${BYTES} == 0 ]; then
+    if [ -n "$USAGE1" ] && [ -n "$USAGE2" ]; then
+      USAGE=$((($USAGE2 - $USAGE1) / 10000))
+    else
+      USAGE=0
+    fi
+
+    # Accurately compute memory usage in cgroup v2 (memory.current minus inactive_file for active working memory)
+    MEM_CURRENT=$(cat /sys/fs/cgroup/lxc.payload.${1}/memory.current 2>/dev/null || lxc-cgroup -n ${1} memory.current 2>/dev/null)
+    INACTIVE_FILE=$(awk '/^inactive_file / {print $2}' /sys/fs/cgroup/lxc.payload.${1}/memory.stat 2>/dev/null || lxc-cgroup -n ${1} memory.stat 2>/dev/null | awk '/^inactive_file / {print $2}')
+
+    if [ -n "${MEM_CURRENT}" ] && [[ "${MEM_CURRENT}" =~ ^[0-9]+$ ]]; then
+      if [ -n "${INACTIVE_FILE}" ] && [[ "${INACTIVE_FILE}" =~ ^[0-9]+$ ]] && [ "${MEM_CURRENT}" -gt "${INACTIVE_FILE}" ]; then
+        BYTES=$((MEM_CURRENT - INACTIVE_FILE))
+      else
+        BYTES=${MEM_CURRENT}
+      fi
+    else
+      # Fallback to active memory calculation from memory.stat if memory.current is not readable
+      BYTES=$(lxc-cgroup -n ${1} memory.stat 2>/dev/null | awk '$1 ~ /^(anon|file|kernel)$/ {sum += $2} $1 == "inactive_file" {sum -= $2} END {if (sum > 0) print sum; else print 0}')
+    fi
+
+    if [ -z "${BYTES}" ] || [ ${BYTES} -le 0 ]; then
       MEM=0
     elif [ ${BYTES} -ge 1099511627776 ]; then
       MEM="$(awk '{printf "%.2f", $1 / 1099511627776}' <<< ${BYTES})TiB"
@@ -21,19 +40,62 @@ do
     else
       MEM="${BYTES}Bytes"
     fi
-    IPINFO=$(lxc-info ${1} -iH 2>/dev/null)
-    if [ -z "${IPINFO}" ]; then
-      IPs=""
-    else
-      IPv4="$(grep '\.' <<< ${IPINFO} | grep -v '172\.')"
-      IPDocker="$(grep -E "172." <<< ${IPINFO})"
-      IPv6="$(grep ':' <<< ${IPINFO})"
-      IPs="$(echo -e "${IPv4}\n${IPDocker}\n${IPv6}" | grep -v '^$')"
+
+    # IP classification: Distinguish LAN/regular IPs from Docker bridge IPs
+    IPv4=""
+    IPDocker=""
+    IPv6=""
+
+    CPID=$(cat /sys/fs/cgroup/lxc.payload.${1}/cgroup.procs 2>/dev/null | head -1)
+    [ -z "$CPID" ] && CPID=$(lxc-info -n ${1} -pH 2>/dev/null)
+
+    if [ -n "$CPID" ] && [ -d "/proc/$CPID/ns" ]; then
+      while read -r iface proto ip_cidr rest; do
+        [ "$iface" == "lo" ] && continue
+        ip="${ip_cidr%%/*}"
+        [ -z "$ip" ] && continue
+
+        if [[ "$iface" =~ ^(docker[0-9]*|br-[0-9a-f]{12}|docker_gwbridge) ]]; then
+          IPDocker="${IPDocker:+$IPDocker$'\n'}$ip"
+        elif [ "$proto" == "inet" ]; then
+          IPv4="${IPv4:+$IPv4$'\n'}$ip"
+        elif [ "$proto" == "inet6" ]; then
+          [[ "$ip" =~ ^fe80: ]] && continue
+          IPv6="${IPv6:+$IPv6$'\n'}$ip"
+        fi
+      done < <(nsenter -t "$CPID" -n ip -o addr show 2>/dev/null | awk '{print $2, $3, $4}')
     fi
+
+    # Fallback to lxc-info if nsenter returned nothing
+    if [ -z "$IPv4" ] && [ -z "$IPDocker" ] && [ -z "$IPv6" ]; then
+      IPINFO=$(lxc-info -n ${1} -iH 2>/dev/null)
+      if [ -n "${IPINFO}" ]; then
+        while read -r ip; do
+          [ -z "$ip" ] && continue
+          if [[ "$ip" =~ : ]]; then
+            [[ "$ip" =~ ^fe80: ]] && continue
+            IPv6="${IPv6:+$IPv6$'\n'}$ip"
+          elif [[ "$ip" =~ ^172\.(1[7-9]|2[0-9]|3[0-1])\. ]]; then
+            # Only treat as Docker if container config explicitly connects to a docker bridge
+            LXC_NET_LINK=$(grep "lxc.net.*link" /boot/config/plugins/lxc/lxc.conf 2>/dev/null | cut -d '=' -f2 | xargs)
+            if [[ "$LXC_NET_LINK" =~ ^(docker[0-9]*|br-[0-9a-f]{12}) ]]; then
+              IPDocker="${IPDocker:+$IPDocker$'\n'}$ip"
+            else
+              IPv4="${IPv4:+$IPv4$'\n'}$ip"
+            fi
+          elif [[ "$ip" =~ \. ]]; then
+            IPv4="${IPv4:+$IPv4$'\n'}$ip"
+          fi
+        done <<< "${IPINFO}"
+      fi
+    fi
+
+    IPs="$(echo -e "${IPv4}\n${IPDocker}\n${IPv6}" | grep -v '^$')"
+
     echo "CPU = ${USAGE}
 MEMORY = ${MEM}
 IPS = \"${IPs//$'\n'/<br/>}\"" > /tmp/lxc/containers/.${1}
     mv /tmp/lxc/containers/.${1} /tmp/lxc/containers/${1}
   fi
 done
-rm /tmp/lxc/containers/${1} /tmp/lxc/containers/.${1}
+rm -f /tmp/lxc/containers/${1} /tmp/lxc/containers/.${1}

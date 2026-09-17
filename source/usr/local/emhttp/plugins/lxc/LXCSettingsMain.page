@@ -87,6 +87,7 @@ Default network interface:
   }
 }
 ?>
+  </select>
   <input type="checkbox" name="CHANGENETCONT" <?php echo (!$started) ? "disabled" : ""; ?>>
   <label for="CHANGENETCONT"><?php echo (!$started) ? 'Array must be started to change networks from containers' : 'Change network from existing containers'; ?></label>
 
@@ -97,8 +98,6 @@ If a ethX or vhostX interface is selected the net type will be changed to maclva
 <b>Note:</b> If you are using ethX or vhostX you have to enable <b>Host access to custom networks</b> in your <a href="/Settings/DockerSettings" target="_blank">Docker Settings</a></p>
 <p><b style="color: #ff0000;">ATTENTION:</b> If you are changing the interfaces from brX to ethX/vhostX or vice versa the network configurations from the existing containers will not be changed! To change the network configurations from the existing containers tick the checkbox "Change network from existing containers".</p>
 </blockquote>
-
-  </select>
 
   <input type="hidden" name="TIMEOUT" value="<?php echo $settings->default_timeout;?>">
   <input type="hidden" name="AUTOSTART_DELAY" value="<?php echo $settings->default_startdelay;?>">
@@ -146,7 +145,7 @@ echo "<div style=\"text-align: right;\"><span>Installed LXC Version: " . $lxc_ve
 
 <?php
 if(isset($_POST['changeCFG'])) {
-$settings->changeConfig($started, $_POST["DEFAULTDIR"], $_POST["BDEVTYPE"], $_POST["SERVICE"], $_POST["DYNAMIC_STATS"], $_POST["TIMEOUT"], $_POST["AUTOSTART_DELAY"], $_POST["INTERFACENAME"], $_POST["CHANGENETCONT"], $_POST["LXC_CONTAINER_URL"], $_POST["BACKUP_ENABLED"], $_POST["BACKUPDIR"], $_POST["BACKUPS_TO_KEEP"], $_POST["CPU_THREADS"], $_POST["COMPRESSION_RATIO"], $_POST["USE_SNAPSHOT"]);
+$settings->changeConfig($started, $_POST["DEFAULTDIR"], $_POST["BDEVTYPE"], $_POST["SERVICE"], $_POST["DYNAMIC_STATS"], $_POST["TIMEOUT"], $_POST["AUTOSTART_DELAY"], $_POST["INTERFACENAME"], $_POST["CHANGENETCONT"] ?? 'no', $_POST["LXC_CONTAINER_URL"], $_POST["BACKUP_ENABLED"], $_POST["BACKUPDIR"], $_POST["BACKUPS_TO_KEEP"], $_POST["CPU_THREADS"], $_POST["COMPRESSION_RATIO"], $_POST["USE_SNAPSHOT"]);
 echo '<script>parent.window.location.reload();</script>';
 }
 ?>

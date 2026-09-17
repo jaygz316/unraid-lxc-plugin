@@ -5,22 +5,31 @@ ACTIVE_CONTAINERS="$(lxc-ls --line --active 2>/dev/null)"
 # Exit if no containers are active and return zero
 if [ -z "${ACTIVE_CONTAINERS}" ]; then
   echo "0"
-  exit
+  exit 0
 fi
 
-# Get all relevant memory entries from containers
+MEMORY_USAGE=0
+# Get all relevant memory entries from containers in cgroup v2
 for container in ${ACTIVE_CONTAINERS} ; do
-  CONT_MEMORY="$(lxc-cgroup ${container} memory.stat 2>/dev/null | grep -Ew "anon|kernel|kernel_stack|pagetables|sec_pagetables|percpu|sock|vmalloc|shmem" | awk '{print $2}')"
-  # Add up memory values
-  for value in ${CONT_MEMORY} ; do
-    if [[ ${value} =~ ^[0-9]+$ ]]; then
-      ((MEMORY_USAGE += value))
+  MEM_CURRENT=$(cat /sys/fs/cgroup/lxc.payload.${container}/memory.current 2>/dev/null || lxc-cgroup -n ${container} memory.current 2>/dev/null)
+  INACTIVE_FILE=$(awk '/^inactive_file / {print $2}' /sys/fs/cgroup/lxc.payload.${container}/memory.stat 2>/dev/null || lxc-cgroup -n ${container} memory.stat 2>/dev/null | awk '/^inactive_file / {print $2}')
+
+  if [ -n "${MEM_CURRENT}" ] && [[ "${MEM_CURRENT}" =~ ^[0-9]+$ ]]; then
+    if [ -n "${INACTIVE_FILE}" ] && [[ "${INACTIVE_FILE}" =~ ^[0-9]+$ ]] && [ "${MEM_CURRENT}" -gt "${INACTIVE_FILE}" ]; then
+      CONT_MEM=$((MEM_CURRENT - INACTIVE_FILE))
+    else
+      CONT_MEM=${MEM_CURRENT}
     fi
-  done
-  unset CONT_MEMORY
+  else
+    CONT_MEM=$(lxc-cgroup -n ${container} memory.stat 2>/dev/null | awk '$1 ~ /^(anon|file|kernel)$/ {sum += $2} $1 == "inactive_file" {sum -= $2} END {if (sum > 0) print sum; else print 0}')
+  fi
+
+  if [[ ${CONT_MEM} =~ ^[0-9]+$ ]]; then
+    ((MEMORY_USAGE += CONT_MEM))
+  fi
 done
 
-# Check if value is a integer and return the value otherwiese return zero
+# Check if value is an integer and return the value otherwise return zero
 if [[ ${MEMORY_USAGE} =~ ^[0-9]+$ ]]; then
   echo "${MEMORY_USAGE}"
 else

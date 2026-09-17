@@ -1,0 +1,63 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - '20*'
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to release (e.g. 2026.09.17)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release LXC Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version
+        id: get_version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            RAW_VER="${{ inputs.version }}"
+          else
+            RAW_VER="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${RAW_VER#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VERSION}"
+
+      - name: Build Plugin Package and Update Checksum
+        run: |
+          bash source/makepkg-unraid.sh "${{ steps.get_version.outputs.version }}"
+
+      - name: Verify Artifacts
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          ls -lh dist/lxc-${VERSION}.txz dist/lxc-${VERSION}.txz.md5 lxc.plg
+          echo "MD5 Checksum:"
+          cat dist/lxc-${VERSION}.txz.md5
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          files: |
+            dist/lxc-${{ steps.get_version.outputs.version }}.txz
+            dist/lxc-${{ steps.get_version.outputs.version }}.txz.md5
+            lxc.plg
+          generate_release_notes: true
+          draft: false
+          prerelease: false

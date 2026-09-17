@@ -11,10 +11,10 @@
 
 /* Sorting button in header */
 #sorting {
-    cursor:hand;
-    margin-left:12px;
-    display:inline-block;
-    width:32px
+    cursor: pointer;
+    margin-left: 12px;
+    display: inline-block;
+    width: 32px;
 }
 
 /* Container name */
@@ -28,9 +28,23 @@
     margin-bottom: 5px;
 }
 
-/* Table spacing */
+/* Table spacing and responsiveness */
 table tbody td {
-    line-height:normal
+    line-height: normal;
+}
+
+#lxc_table, #snapshot_table {
+    width: 100%;
+    max-width: 100%;
+}
+
+@media screen and (max-width: 768px) {
+    #lxc_table, #snapshot_table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+    }
 }
 
 /* Terminal button */
@@ -40,7 +54,7 @@ table tbody td {
 
 /* Status dialog output */
 .logLine {
-    font-family: bitstream;
+    font-family: bitstream, monospace;
     font-size: 1.2rem;
     line-height: 1.6rem;
     margin: 0 8px;
@@ -56,7 +70,7 @@ p.centered {
 }
 
 button.logLine {
-    font-family: clear-sans;
+    font-family: clear-sans, sans-serif;
     font-size: 1.1rem;
     font-weight: bold;
     letter-spacing: 2px;
@@ -70,19 +84,24 @@ button.logLine {
     border-radius: 4px;
     border: 0;
     color: #ff8c2f;
-    background: -webkit-gradient(linear, left top, right top, from(#e22828), to(#ff8c2f)) 0 0 no-repeat, -webkit-gradient(linear, left top, right top, from(#e22828), to(#ff8c2f)) 0 100% no-repeat, -webkit-gradient(linear, left bottom, left top, from(#e22828), to(#e22828)) 0 100% no-repeat, -webkit-gradient(linear, left bottom, left top, from(#ff8c2f), to(#ff8c2f)) 100% 100% no-repeat;
-    background: linear-gradient(90deg, #e22828 0, #ff8c2f) 0 0 no-repeat, linear-gradient(90deg, #e22828 0, #ff8c2f) 0 100% no-repeat, linear-gradient(0deg, #e22828 0, #e22828) 0 100% no-repeat, linear-gradient(0deg, #ff8c2f 0, #ff8c2f) 100% 100% no-repeat;
+    background: linear-gradient(90deg, #e22828 0, #ff8c2f) 0 0 no-repeat,
+                linear-gradient(90deg, #e22828 0, #ff8c2f) 0 100% no-repeat,
+                linear-gradient(0deg, #e22828 0, #e22828) 0 100% no-repeat,
+                linear-gradient(0deg, #ff8c2f 0, #ff8c2f) 100% 100% no-repeat;
     background-size: 100% 2px, 100% 2px, 2px 100%, 2px 100%;
 }
 
 button.logLine:hover {
     color: white;
-    background: linear-gradient(90deg,#e22828 0,#ff8c2f) 0 0 no-repeat, linear-gradient(90deg,#e22828 0,#ff8c2f) 0 100% no-repeat,linear-gradient(0deg,#e22828 0,#e22828) 0 100% no-repeat,linear-gradient(0deg,#ff8c2f 0,#ff8c2f) 100% 100% no-repeat;
+    background: linear-gradient(90deg, #e22828 0, #ff8c2f) 0 0 no-repeat,
+                linear-gradient(90deg, #e22828 0, #ff8c2f) 0 100% no-repeat,
+                linear-gradient(0deg, #e22828 0, #e22828) 0 100% no-repeat,
+                linear-gradient(0deg, #ff8c2f 0, #ff8c2f) 100% 100% no-repeat;
 }
 
 /* MAC textbox */
 #mac {
-    text-transform:uppercase
+    text-transform: uppercase;
 }
 .emac {
     color: #c12020;
@@ -100,24 +119,76 @@ h3.startArray, h2.noContainers {
     text-align: center;
 }
 
+/* Dropdown styling */
 .show_lxc {
-    display:block;
+    display: block !important;
     top: unset !important;
 }
 
+.dropdown-menu.dropdown-context {
+    z-index: 1001;
+    min-width: 160px;
+}
+
+#lxc .outer {
+    position: relative;
+    display: inline-block;
+}
+
+#lxc .lxc-dropdown-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+#lxc .dropdown-menu {
+    position: absolute;
+    top: 36px;
+    left: 0;
+    z-index: 1001;
+}
+
 .spinner {
-  display: none;
-  position: fixed;
-  z-index: 9999;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 
 .spoiler[open] summary::after {
-  content: attr(data-open);
+    content: attr(data-open);
 }
 
 .spoiler:not([open]) summary::after {
-  content: attr(data-close);
+    content: attr(data-close);
+}
+
+/* Container config editor & theme variable support */
+#configEditor {
+    background-color: var(--bg-color, inherit);
+    color: var(--text-color, inherit);
+    border: 1px solid var(--border-color, rgba(128, 128, 128, 0.4));
+    font-family: monospace;
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 4px;
+}
+
+body.black #configEditor,
+body.dark #configEditor,
+html[data-theme="dark"] #configEditor,
+html[data-theme="black"] #configEditor {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border-color: #333333;
+}
+
+body.white #configEditor,
+body.azure #configEditor,
+html[data-theme="white"] #configEditor,
+html[data-theme="azure"] #configEditor {
+    background-color: #ffffff;
+    color: #333333;
+    border-color: #cccccc;
 }
