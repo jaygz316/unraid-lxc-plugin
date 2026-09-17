@@ -20,7 +20,7 @@ if [[ -z "${1}" || -z "${2}" ]]; then
   echo "WARNING: Taking a snapshot will stop the container and start the container"
   echo "         again if it was running"
   echo
-  echo "lxc-autosnapshot by Christoph Hummer v2023.07.30"
+  echo "lxc-autosnapshot v2026.09.17"
   exit 1
 else
   LXC_CONTAINERS=$(lxc-ls | awk '{ for (i=1; i<=NF; i++) print $i }')
@@ -63,13 +63,6 @@ fi
 echo "Creating snapshot from container $1" | tee >(logger -t "LXC: lxc-autosnapshot")
 CUR_SNAPS=$(lxc-snapshot -n $1 -L | awk '{print $1}' | sort)
 lxc-snapshot -n $1 2>/dev/null
-if [ "${BDEVTYPE}" == "zfs" ]; then
-  NEW_SNAPS=$(lxc-snapshot -n $1 -L | awk '{print $1}' | sort)
-  NEW_SNAP=$(diff <(echo "$CUR_SNAPS") <(echo "$NEW_SNAPS") | grep '^>' | cut -c 3-)
-  ZFS_POOL=$(echo $LXC_PATH | cut -d '/' -f3)
-  zfs set canmount=on ${ZFS_POOL}/zfs_lxccontainers/$1/${NEW_SNAP} 2>/dev/null
-  zfs mount ${ZFS_POOL}/zfs_lxccontainers/$1/${NEW_SNAP} 2>/dev/null
-fi
 echo "Taking snapshot from container $1 finished" | tee >(logger -t "LXC: lxc-autosnapshot")
 
 # Start container if it was running before

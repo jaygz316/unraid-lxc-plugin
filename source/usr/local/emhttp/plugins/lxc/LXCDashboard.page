@@ -40,8 +40,8 @@ $mytiles[$pluginname]['column2'] =
 <<<EOT
 <tbody id="lxc" title="$pluginname">
 <tr><td><i class='fa fa-cubes f32'></i><div class='section'>$pluginname<span><br>Container count: $container_count with $active_count running</span><br></div>
-<a href="/Dashboard/Settings/LXCSettings" title="_(Go to LXC settings)_"><i class="fa fa-fw fa-cog control"></i></a></td></tr></td></tr>
-<tr><td>
+<a href="/Settings/LXCSettings" title="_(Go to LXC settings)_"><i class="fa fa-fw fa-cog control"></i></a></td></tr>
+<tr><td class="lxc-tile-content">
 $layout
 </td></tr>
 </tbody>
@@ -59,31 +59,31 @@ function LXCLayout() {
   }
 
   foreach ($allContainers as $container) {
-    $page_render .= '<span class="outer solid" >';
+    $page_render .= '<span class="outer solid">';
     if (file_exists($settings->default_path . '/custom-icons/' . $container->name . '.png')) {
-      $page_render .= '<span class="hand" onclick="showDropdown(\'' . $container->name . '\')"><img src="' . $settings->default_path . '/custom-icons/' . $container->name . '.png" class="img" width="30" height="30"></span>';
+      $page_render .= '<span class="hand dropdown_btn" onclick="showDropdown(\'' . $container->name . '\')"><img src="' . $settings->default_path . '/custom-icons/' . $container->name . '.png" class="img dropdown_btn" width="30" height="30"></span>';
     } elseif (file_exists('/usr/local/emhttp/plugins/lxc/images/distributions/' . $container->distribution . '.png')) {
-      $page_render .= '<span class="hand" onclick="showDropdown(\'' . $container->name . '\')"><img src="/plugins/lxc/images/distributions/' . $container->distribution . '.png" class="img" width="30" height="30"></span>';
+      $page_render .= '<span class="hand dropdown_btn" onclick="showDropdown(\'' . $container->name . '\')"><img src="/plugins/lxc/images/distributions/' . $container->distribution . '.png" class="img dropdown_btn" width="30" height="30"></span>';
     } else {
-      $page_render .= '<span class="hand" onclick="showDropdown(\'' . $container->name . '\')"><img src="/plugins/lxc/images/distributions/question.png" class="img" width="30" height="30"></span>';    
+      $page_render .= '<span class="hand dropdown_btn" onclick="showDropdown(\'' . $container->name . '\')"><img src="/plugins/lxc/images/distributions/question.png" class="img dropdown_btn" width="30" height="30"></span>';    
     }
-    $namedescr = $container->name;
+    $namedescr = htmlspecialchars($container->name, ENT_QUOTES, 'UTF-8');
     if ($container->description != "") {
-      $namedescr .= ' | ' . $container->description;
+      $namedescr .= ' | ' . htmlspecialchars($container->description, ENT_QUOTES, 'UTF-8');
     }
     $page_render .= '<span class="inner" style="overflow: hidden;"><span title="' . $namedescr . '">' . $namedescr . '</span><br>';
     if($container->state == "RUNNING") {
-      $page_render .= '<i class="fa fa-play started green-text"></i>';
+      $page_render .= '<i class="fa fa-play started green-text"></i> ';
       $page_render .= '<span class="state">started</span></span>';
     } elseif($container->state == "FROZEN") {
-      $page_render .= '<i class="fa fa-pause paused orange-text"></i>';
+      $page_render .= '<i class="fa fa-pause paused orange-text"></i> ';
       $page_render .= '<span class="state">paused</span></span>';
     } else {
-      $page_render .= '<i class="fa fa-square stopped red-text"></i>';
+      $page_render .= '<i class="fa fa-square stopped red-text"></i> ';
       $page_render .= '<span class="state">stopped</span></span>';
     }
-    $page_render .= '<span style="position: relative !important; right: 190px">';
-    $page_render .= '<ul id="dropdown_' . $container->name .'" class="dropdown-menu dropdown-context fa-ul" style="z-index: 1;">';
+    $page_render .= '<span class="lxc-dropdown-wrapper" style="position: relative; display: inline-block;">';
+    $page_render .= '<ul id="dropdown_' . $container->name .'" class="dropdown-menu dropdown-context fa-ul" style="z-index: 1001;">';
     if($container->state == "RUNNING") {
       if ($container->lxcwebui != "") {
         if (strpos($container->lxcwebui, "[IP]") !== false) {

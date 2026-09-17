@@ -4,6 +4,7 @@ Markdown="false"
 <link rel="stylesheet" href="<? autov('/plugins/lxc/css/lxc.css') ?>">
 <link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.switchbutton.css') ?>">
 <script src="<? autov('/webGui/javascript/jquery.switchbutton.js') ?>"></script>
+<script src="<? autov('/plugins/lxc/js/lxc.js') ?>"></script>
 
 
 <?php
@@ -99,7 +100,6 @@ $lxc = simplexml_load_file("/tmp/lxc_container_template.xml");
             </div>
           </details>
         </dl>
-        <dd>
       </div>
       <div>
         <dl>
@@ -110,7 +110,7 @@ $lxc = simplexml_load_file("/tmp/lxc_container_template.xml");
               <dl>
                 <dt>WebUI:</dt>
                 <dd>
-                  <input type="text" name="contWebUI" value="<? echo $lxc->WebUI; ?>" pattern="^[a-zA-Z0-9\-_:.\/\[\]]?*$" placeholder="Full URL to WebGUI or empty for none" class="forbidSpace">
+                  <input type="text" name="contWebUI" value="<? echo $lxc->WebUI; ?>" pattern="^[a-zA-Z0-9\-_:.\/\[\]]*$" placeholder="Full URL to WebGUI or empty for none" class="forbidSpace">
                 </dd>
               </dl>
             </div>
@@ -132,16 +132,12 @@ $lxc = simplexml_load_file("/tmp/lxc_container_template.xml");
             </div>
           </details>
         </dl>
-        <dd>
       </div>
       <?php if(preg_match('/\b(btrfs|zfs)\b/', $settings->default_bdevtype)) {
-              echo '<div><dl><dt>Convert container to ' . ((strpos($settings->default_bdevtype, "zfs") !== false) ? "ZFS" : ((strpos($settings->default_bdevtype, "btrfs") !== false) ? "BTRFS" : "")) . ':</dt><dd><input name="contConvBDEV" type="checkbox" checked>';
+              echo '<div><dl><dt>Convert container to ' . ((strpos($settings->default_bdevtype, "zfs") !== false) ? "ZFS" : ((strpos($settings->default_bdevtype, "btrfs") !== false) ? "BTRFS" : "")) . ':</dt><dd><input name="contConvBDEV" type="checkbox" checked></dd></dl></div>';
             } else {
               echo '<input name="contConvBDEV" type="checkbox" hidden>';
             } ?>
-          </dd>
-        </dl>
-      </div>
       <div>
         <dl>
           <dt>Start after creation:</dt>

@@ -43,7 +43,7 @@ function show_help {
   echo "                         will be overwritten"
   echo "  -h, --help             Display this help message"
   echo
-  echo "lxc-autobackup by Christoph Hummer v2023.08.03"
+  echo "lxc-autobackup v2026.09.17"
 }
 
 # Check if restore and from snapshot where used at the same time
@@ -158,10 +158,6 @@ backup_lxc_container() {
     fi
     TEMP_SNAP=$(diff <(echo "$CUR_SNAPS") <(echo "$NEW_SNAPS") | grep '^>' | cut -c 3-)
     echo "Creating backup from temporary snaphot ${TEMP_SNAP} from container ${CONT_NAME}" | tee >(logger -t "LXC: lxc-autobackup")
-    if [ "${BDEVTYPE}" == "zfs" ]; then
-      ZFS_POOL=$(echo $LXC_PATH | cut -d '/' -f3)
-      zfs mount ${ZFS_POOL}/zfs_lxccontainers/${CONT_NAME}/${TEMP_SNAP} 2>/dev/null
-    fi
     cd ${LXC_PATH}/${CONT_NAME}/snaps/${TEMP_SNAP}
     rm -f ${LXC_PATH}/${CONT_NAME}/snaps/${TEMP_SNAP}/ts
     if [ -f "${LXC_PATH}/custom-icons/${CONT_NAME}.png" ]; then
@@ -174,6 +170,9 @@ backup_lxc_container() {
       rm -f ${LXC_PATH}/${CONT_NAME}/snaps/${TEMP_SNAP}/${CONT_NAME}.png
     fi
     umount ${LXC_PATH}/${CONT_NAME}/snaps/${TEMP_SNAP}/rootfs 2>/dev/null
+    if which zfs >/dev/null 2>&1; then
+      zfs unmount "${LXC_PATH}/${CONT_NAME}/snaps/${TEMP_SNAP}/rootfs" 2>/dev/null
+    fi
     lxc-snapshot -n ${CONT_NAME} -d ${TEMP_SNAP} 2>/dev/null
     echo "Temporary snapshot ${TEMP_SNAP} from container ${CONT_NAME} deleted" | tee >(logger -t "LXC: lxc-autobackup")
   else
@@ -226,14 +225,12 @@ restore_lxc_container() {
   fi
   mkdir -p ${LXC_PATH}/${NEW_NAME}
   if [ "${BDEVTYPE}" == "btrfs" ]; then
-    BTRFS_VOLUME=$(echo "$LXC_PATH" | cut -d '/' -f1-3)
-    CONTAINER_SUBVOLUME=$(echo "$LXC_PATH" | cut -d '/' -f4-)/${NEW_NAME}/rootfs
-    cd ${BTRFS_VOLUME}
-    btrfs subvolume create ${CONTAINER_SUBVOLUME%/*}/rootfs
+    mkdir -p "${LXC_PATH}/${NEW_NAME}"
+    btrfs subvolume create "${LXC_PATH}/${NEW_NAME}/rootfs"
   elif [ "${BDEVTYPE}" == "zfs" ]; then
-    mkdir -p ${LXC_PATH}/${NEW_NAME}
-    CONTAINER_DATASET=$(zfs list -H -o name $(echo $LXC_PATH | awk -F/ '{print "/" $2 "/" $3}'))/zfs_lxccontainers/${NEW_NAME}
-    zfs create -o mountpoint=${LXC_PATH}/${NEW_NAME}/rootfs -p ${CONTAINER_DATASET}/${NEW_NAME}
+    mkdir -p "${LXC_PATH}/${NEW_NAME}"
+    CONTAINER_DATASET=$(zfs list -H -o name $(echo "$LXC_PATH" | awk -F/ '{print "/" $2 "/" $3}'))/zfs_lxccontainers/${NEW_NAME}
+    zfs create -o mountpoint="${LXC_PATH}/${NEW_NAME}/rootfs" -p "${CONTAINER_DATASET}"
   fi
   if [ -z "${FILE_NAME}" ]; then
     echo "Creating ${NEW_NAME} from backup file ${RESTORE_FILE}" | tee >(logger -t "LXC: lxc-autobackup")
@@ -247,7 +244,7 @@ restore_lxc_container() {
   elif [ "${BDEVTYPE}" == "btrfs" ]; then
     sed -i "/lxc.rootfs.path = /c\lxc.rootfs.path = btrfs:${LXC_PATH//\//\\\/}\/${NEW_NAME}\/rootfs" ${LXC_PATH}/${NEW_NAME}/config
   elif [ "${BDEVTYPE}" == "zfs" ]; then
-    sed -i "/lxc.rootfs.path = /c\lxc.rootfs.path = zfs:${CONTAINER_DATASET//\//\\/}\/${NEW_NAME}" ${LXC_PATH}/${NEW_NAME}/config
+    sed -i "/lxc.rootfs.path = /c\lxc.rootfs.path = zfs:${CONTAINER_DATASET//\//\\/}" ${LXC_PATH}/${NEW_NAME}/config
   fi    
   sed -i "/lxc.uts.name =/c\lxc.uts.name = ${NEW_NAME}" ${LXC_PATH}/${NEW_NAME}/config
   if [ -d ${LXC_PATH}/${NEW_NAME}/snaps ]; then

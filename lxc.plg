@@ -1,19 +1,33 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "lxc">
-  <!ENTITY author    "ich777">
-  <!ENTITY version   "2025.06.15">
+  <!ENTITY author    "jaygz316">
+  <!ENTITY version   "2026.09.17">
   <!ENTITY launch    "Settings/LXCSettings">
   <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;-plugin/raw/master">
   <!ENTITY pluginURL "&gitURL;/&name;.plg">
-  <!ENTITY md5       "15d369fe8d27c1bd582dd54ac1d8c5a4">
+  <!ENTITY md5       "5d59dd0fd7ec76900b2ffa0d7749b2ed">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
 
-<PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.10.0" support="https://forums.unraid.net/topic/123935-plugin-lxc-plugin/">
+<PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.10.0" support="https://github.com/&author;/unraid-&name;-plugin">
 
 <CHANGES>
+
+###2026.09.17
+- Modernize plugin architecture and repository references (jaygz316)
+- Fix array stop hang: correct lxc-stop syntax error, add wait timeout loop, cleanly unmount container mounts and ZFS datasets
+- Robust array start: verify atd daemon status before dispatching startup hook, fallback to nohup
+- Fix ZFS nested dataset bug (pool/zfs_lxccontainers/name/name) in autobackup, dirtozfs, and autosnapshot
+- Eliminate host-level ZFS mount leaks, letting LXC manage runtime mounts
+- Robust BTRFS subvolume creation handling arbitrary filesystem path depths
+- Prevent data loss during container storage conversion (verify source before deletion)
+- Accurately compute cgroup v2 working memory usage (memory.current minus inactive_file)
+- Fix container IP classification to prevent mislabeling RFC1918 172.16.0.0/12 addresses as Docker
+- Modernize packaging and automated CI/CD release workflow
+- Clean plugin uninstallation: cleanly remove LXC packages, symlinks, and caches
+- Update default container path recommendation to /mnt/cache/lxc
 
 ###2025.05.20
 - Fix an issue deleting old backups with lxc-autobackup was not working correctly
@@ -526,6 +540,7 @@ rm -f $(ls &plugin;/&name;*.txz 2>/dev/null|grep -v '&version;')
 </FILE>
 
 <FILE Name="&plugin;/&name;-&version;.txz" Run="upgradepkg --install-new">
+<URL>https://github.com/&author;/unraid-&name;-plugin/releases/download/&version;/&name;-&version;.txz</URL>
 <URL>&gitURL;/packages/&name;-&version;.txz</URL>
 <MD5>&md5;</MD5>
 </FILE>
@@ -597,7 +612,7 @@ grep -q "BDEVTYPE=" &plugin;/plugin.cfg || echo "BDEVTYPE=dir" &gt;&gt; &plugin;
 grep -q "DYNAMIC_STATS=" &plugin;/plugin.cfg || echo "DYNAMIC_STATS=enabled" &gt;&gt; &plugin;/plugin.cfg
 
 if [ ! -f "&plugin;/lxc.conf" ]; then
-  echo 'lxc.lxcpath=/mnt/user/lxc' > "&plugin;/lxc.conf"
+  echo 'lxc.lxcpath=/mnt/cache/lxc' > "&plugin;/lxc.conf"
 fi
 
 if [ ! -f "&plugin;/default.conf" ]; then
@@ -625,16 +640,25 @@ fi
 #Set variables and get version numbers
 LXC_DATADIRECTORY="$(cat &plugin;/lxc.conf | grep -n "lxc.lxcpath" | cut -d '=' -f2 | sed 's/\"//g')"
 LXC_SERVICE="$(cat &plugin;/plugin.cfg | grep -nw "SERVICE" | cut -d '=' -f2 | sed 's/\"//g')"
-LAT_V="$(wget -qO- https://api.github.com/repos/ich777/unraid-lxc-plugin/releases/latest | jq -r '.tag_name')"
-CUR_V="$(ls &plugin;/packages/LXC-*-${BUILD_IDX}.txz | sort -V | tail -1 | cut -d '-' -f2)"
-DL_URL="https://github.com/ich777/unraid-lxc-plugin/releases/download/$LAT_V"
+LAT_V="$(wget -qO- https://api.github.com/repos/jaygz316/unraid-lxc-plugin/releases/latest 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)"
+CUR_V="$(ls &plugin;/packages/LXC-*-${BUILD_IDX}.txz 2>/dev/null | sort -V | tail -1 | cut -d '-' -f2)"
 
-if [ -z "${LAT_V}" ]; then
+if [ -z "${LAT_V}" ] || [ "${LAT_V}" = "null" ]; then
+  # Fallback to upstream release assets if no releases published under fork yet
+  LAT_V="$(wget -qO- https://api.github.com/repos/ich777/unraid-lxc-plugin/releases/latest 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)"
+  if [ -n "${LAT_V}" ]; then
+    if [ "${LAT_V}" != "null" ]; then
+      DL_URL="https://github.com/ich777/unraid-lxc-plugin/releases/download/$LAT_V"
+    fi
+  fi
+else
+  DL_URL="https://github.com/jaygz316/unraid-lxc-plugin/releases/download/$LAT_V"
+fi
+
+if [ -z "${LAT_V}" ] || [ "${LAT_V}" = "null" ]; then
   if [ -z "${CUR_V}" ]; then
-    echo "---Something went horribly wrong, can't get latest version from LXC and no local version found!---"
-    removepkg &name;-&version;.txz
-    rm -rf &plugin;
-    exit 1
+    LAT_V="7.0.0"
+    DL_URL="https://github.com/ich777/unraid-lxc-plugin/releases/download/$LAT_V"
   else
     LAT_V=${CUR_V}
   fi
@@ -754,9 +778,14 @@ echo "------------------------------"
 echo "---Uninstalling LXC Package---"
 echo "------------------------------"
 # Remove plugin related files
-removepkg &name;-&version;
+removepkg &name;-&version; 2>/dev/null
+removepkg LXC 2>/dev/null
+rm -f /etc/lxc/default.conf /etc/lxc/lxc.conf
+if [ -d /etc/lxc ]; then rmdir /etc/lxc 2>/dev/null; fi
+rm -rf /var/cache/lxc
+rm -f /usr/bin/lxc-autosnapshot /usr/bin/lxc-autobackup /usr/bin/lxc-dirtobtrfs /usr/bin/lxc-dirtozfs
 rm -rf &plugin;
-rm /usr/bin/lxc-autosnapshot /usr/bin/lxc-autobackup /usr/bin/lxc-dirtobtrfs /usr/bin/lxc-dirtozfs
+rm -rf /tmp/lxc
 echo
 echo "------------------------------------------------------------------------------"
 echo "-------------LXC Package uninstalled, please reboot your server!--------------"

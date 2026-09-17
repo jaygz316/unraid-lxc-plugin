@@ -7,14 +7,14 @@ $settings = new Settings();
 
 $started = $var['fsState']=='Started';
 $active_containers = explode("\n", shell_exec("lxc-ls"));
-$container = $_GET['cont'];
-$snapshot = $_GET['snap'];
-$date = $_GET['date'];
+$container = $_GET['cont'] ?? '';
+$snapshot = $_GET['snap'] ?? '';
+$date = $_GET['date'] ?? '';
 ?>
 
 <script>
-  let container = '<?= $container ?>';
-  let snapshot = '<?= $snapshot ?>';
+  let container = <?= json_encode($container); ?>;
+  let snapshot = <?= json_encode($snapshot); ?>;
 </script>
 <link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
 <script src="/plugins/lxc/js/lxc.js"></script>
@@ -25,7 +25,7 @@ $date = $_GET['date'];
 <div class="">
 <dl>
 <dt>Container Name:</dt>
-<dd><input type="text" name="contName" pattern="[a-zA-Z0-9][A-Za-z0-9 \-_.]{0,49}" placeholder="<?= $container ?>_restored" class="forbidSpace" required></dd>
+<dd><input type="text" name="contName" pattern="[a-zA-Z0-9][A-Za-z0-9 \-_.]{0,49}" placeholder="<?= htmlspecialchars($container, ENT_QUOTES, 'UTF-8') ?>_restored" class="forbidSpace" required></dd>
 </dl>
 </div>
 
@@ -40,14 +40,14 @@ $date = $_GET['date'];
 <div class="">
 <dl>
 <dt>Snapshot Container Name:</dt>
-<dd><input type="text" name="contSnap" required value="<?= $container ?>" disabled></dd>
+<dd><input type="text" name="contSnap" required value="<?= htmlspecialchars($container, ENT_QUOTES, 'UTF-8') ?>" disabled></dd>
 </dl>
 </div>
 
 <div class="">
 <dl>
 <dt>Snapshot:</dt>
-<dd><input type="text" name="contSnapName" required value="<?= $snapshot ?> <?= $date ?>" disabled></dd>
+<dd><input type="text" name="contSnapName" required value="<?= htmlspecialchars($snapshot . ' ' . $date, ENT_QUOTES, 'UTF-8') ?>" disabled></dd>
 </dl>
 </div>
 

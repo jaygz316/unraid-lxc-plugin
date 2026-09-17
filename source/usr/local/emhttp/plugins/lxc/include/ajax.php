@@ -1,21 +1,38 @@
 <?php
 require_once 'functions.php';
 require_once 'Settings.php';
+require_once 'Container.php';
+
+function sanitizeContainerName($name) {
+  $clean = basename(trim((string)$name));
+  if (preg_match('/^[a-zA-Z0-9_.-]+$/', $clean)) {
+    return $clean;
+  }
+  return null;
+}
+
 if (isset($_POST['lxc'])) {
   $settings = new Settings();
-  switch ($_POST['action']) {
+  $action = $_POST['action'] ?? '';
+  switch ($action) {
     case 'startCONT':
-      $container = new Container($_POST['container']);
-      $container->startContainer();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->startContainer();
+      }
       break;
     case 'stopCONT':
-      $container = new Container($_POST['container']);
-      $container->stopContainer();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->stopContainer();
+      }
       break;
     case 'startALLCONT':
       $allContainers = getAllContainers();
       foreach ($allContainers as $cont) {
-        if($cont->state == "STOPPED" || $cont->state == "FROZEN") {
+        if ($cont->state == "STOPPED" || $cont->state == "FROZEN") {
           $container = new Container($cont->name);
           $container->startContainer();
         }
@@ -24,136 +41,215 @@ if (isset($_POST['lxc'])) {
     case 'stopALLCONT':
       $allContainers = getAllContainers();
       foreach ($allContainers as $cont) {
-        if($cont->state == "RUNNING" || $cont->state == "FROZEN") {
+        if ($cont->state == "RUNNING" || $cont->state == "FROZEN") {
           $container = new Container($cont->name);
           $container->stopContainer();
         }
       }
       break;
     case 'restartCONT':
-      $container = new Container($_POST['container']);
-      $container->restartContainer();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->restartContainer();
+      }
       break;
     case 'freezeCONT':
-      $container = new Container($_POST['container']);
-      $container->freezeContainer();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->freezeContainer();
+      }
       break;
     case 'freezeALLCONT':
       $allContainers = getAllContainers();
       foreach ($allContainers as $cont) {
-        if($cont->state == "RUNNING") {
+        if ($cont->state == "RUNNING") {
           $container = new Container($cont->name);
           $container->freezeContainer();
         }
       }
       break;
     case 'unfreezeCONT':
-      $container = new Container($_POST['container']);
-      $container->unfreezeContainer();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->unfreezeContainer();
+      }
       break;
     case 'unfreezeALLCONT':
       $allContainers = getAllContainers();
       foreach ($allContainers as $cont) {
-        if($cont->state == "FROZEN") {
+        if ($cont->state == "FROZEN") {
           $container = new Container($cont->name);
           $container->unfreezeContainer();
         }
       }
       break;
     case 'killCONT':
-      $container = new Container($_POST['container']);
-      $container->killContainer();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->killContainer();
+      }
       break;
     case 'autostart':
-      $container = new Container($_POST['container']);
-      if ($_POST['autostart'] == 'true') {
-        $container->setAutostart(1);
-      } else {
-        $container->setAutostart(0);
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $autostart = (isset($_POST['autostart']) && ($_POST['autostart'] === 'true' || $_POST['autostart'] === '1' || $_POST['autostart'] === 1)) ? 1 : 0;
+        $container->setAutostart($autostart);
       }
       break;
     case 'destroyCONT':
-      $container = new Container($_POST['container']);
-      $container->destroyContainer();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->destroyContainer();
+      }
       break;
     case 'snapshotCONT':
-      $container = new Container($_POST['container']);
-      $container->createSnapshot();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->createSnapshot();
+      }
       break;
     case 'deleteSNAP':
-      $container = new Container($_POST['container']);
-      $container->deleteSnapshot($_POST['snapshot']);
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      $snapshot = basename(trim((string)($_POST['snapshot'] ?? '')));
+      if ($cont !== null && preg_match('/^[a-zA-Z0-9_.-]+$/', $snapshot)) {
+        $container = new Container($cont);
+        $container->deleteSnapshot($snapshot);
+      }
       break;
     case 'backupCONT':
-      $container = new Container($_POST['container']);
-      $container->createBackup();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->createBackup();
+      }
       break;
     case 'deleteBACKUP':
-      $container = new Container($_POST['container']);
-      $container->deleteBackup($_POST['backup']);
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      $backup = basename(trim((string)($_POST['backup'] ?? '')));
+      if ($cont !== null && preg_match('/^[a-zA-Z0-9_.-]+$/', $backup)) {
+        $container = new Container($cont);
+        $container->deleteBackup($backup);
+      }
       break;
     case 'createCONT':
-      createContainer($_POST['name'], $_POST['description'], $_POST['distribution'], $_POST['release'], $_POST['startcont'], $_POST['autostart'], $_POST['mac']);
+      $name = sanitizeContainerName($_POST['name'] ?? '');
+      if ($name !== null) {
+        createContainer($name, $_POST['description'] ?? '', $_POST['distribution'] ?? '', $_POST['release'] ?? '', $_POST['startcont'] ?? '', $_POST['autostart'] ?? '', $_POST['mac'] ?? '');
+      }
       break;
     case 'copyCONT':
-      copyContainer($_POST['name'], $_POST['description'], $_POST['container'], $_POST['autostart'], $_POST['mac']);
+      $name = sanitizeContainerName($_POST['name'] ?? '');
+      $source = sanitizeContainerName($_POST['container'] ?? '');
+      if ($name !== null && $source !== null) {
+        copyContainer($name, $_POST['description'] ?? '', $source, $_POST['autostart'] ?? '', $_POST['mac'] ?? '');
+      }
       break;
     case 'showConfig':
-      $container = new Container($_POST['container']);
-      $container->showConfig();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->showConfig();
+      }
       break;
     case 'saveConfig':
-      $updatedConfig = trim($_POST['updatedConfig']);
-      $container = $_POST['container'];
-      $containerConfig = $settings->default_path . "/" . $container . "/config";
-      file_put_contents($containerConfig, $updatedConfig);
-      $container = new Container($container);
-      if($container->state == "RUNNING") {
-        $container->restartContainer();
+      $updatedConfig = trim((string)($_POST['updatedConfig'] ?? ''));
+      $container = sanitizeContainerName($_POST['container'] ?? '');
+      if ($container === null) {
+        break;
+      }
+      $containerConfig = rtrim($settings->default_path, '/') . "/" . $container . "/config";
+      if (file_exists(dirname($containerConfig))) {
+        file_put_contents($containerConfig, $updatedConfig);
+        $containerObj = new Container($container);
+        if ($containerObj->state == "RUNNING") {
+          $containerObj->restartContainer();
+        }
       }
       break;
     case 'fromSnapshot':
-      createFromSnapshot($_POST['name'], $_POST['description'], $_POST['container'], $_POST['snapshot'], $_POST['autostart'], $_POST['mac']);
+      $name = sanitizeContainerName($_POST['name'] ?? '');
+      $source = sanitizeContainerName($_POST['container'] ?? '');
+      $snapshot = basename(trim((string)($_POST['snapshot'] ?? '')));
+      if ($name !== null && $source !== null && preg_match('/^[a-zA-Z0-9_.-]+$/', $snapshot)) {
+        createFromSnapshot($name, $_POST['description'] ?? '', $source, $snapshot, $_POST['autostart'] ?? '', $_POST['mac'] ?? '');
+      }
       break;
     case 'fromBackup':
-      createFromBackup($_POST['name'], $_POST['description'], $_POST['container'], $_POST['backup'], $_POST['autostart'], $_POST['mac']);
+      $name = sanitizeContainerName($_POST['name'] ?? '');
+      $source = sanitizeContainerName($_POST['container'] ?? '');
+      $backup = basename(trim((string)($_POST['backup'] ?? '')));
+      if ($name !== null && $source !== null && preg_match('/^[a-zA-Z0-9_.-]+$/', $backup)) {
+        createFromBackup($name, $_POST['description'] ?? '', $source, $backup, $_POST['autostart'] ?? '', $_POST['mac'] ?? '');
+      }
       break;
     case 'setDescription':
-      $container = new Container($_POST['container']);
-      $container->setDescription($_POST['description']);
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->setDescription($_POST['description'] ?? '');
+      }
       break;
     case 'delDescription':
-      $container = new Container($_POST['container']);
-      $container->delDescription();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->delDescription();
+      }
       break;
     case 'setWebUIURL':
-      $container = new Container($_POST['container']);
-      $container->setWebuiurl($_POST['webuiurl']);
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->setWebuiurl($_POST['webuiurl'] ?? '');
+      }
       break;
     case 'delWebUIURL':
-      $container = new Container($_POST['container']);
-      $container->delWebuiurl();
+      $cont = sanitizeContainerName($_POST['container'] ?? '');
+      if ($cont !== null) {
+        $container = new Container($cont);
+        $container->delWebuiurl();
+      }
       break;
     case 'createTEMPLATE':
-      createfromTemplate($_POST['name'], $_POST['description'], $_POST['repository'], $_POST['webui'], $_POST['icon'], $_POST['startcont'], $_POST['autostart'], $_POST['convertbdev'], $_POST['mac'], $_POST['supportlink'], $_POST['donatelink']);
+      $name = sanitizeContainerName($_POST['name'] ?? '');
+      if ($name !== null) {
+        createfromTemplate($name, $_POST['description'] ?? '', $_POST['repository'] ?? '', $_POST['webui'] ?? '', $_POST['icon'] ?? '', $_POST['startcont'] ?? '', $_POST['autostart'] ?? '', $_POST['convertbdev'] ?? '', $_POST['mac'] ?? '', $_POST['supportlink'] ?? '', $_POST['donatelink'] ?? '');
+      }
       break;
     default:
       break;
   }
 }
 
-require_once 'Container.php';
 if (isset($_POST['action']) && $_POST['action'] == 'updateValues') {
+    if (!is_dir('/tmp/lxc/containers')) {
+        @mkdir('/tmp/lxc/containers', 0755, true);
+    }
     file_put_contents('/tmp/lxc/containers/active', time());
-    $containerNames = json_decode($_POST['containerNames']);
+    $rawNames = $_POST['containerNames'] ?? '[]';
+    $containerNames = is_string($rawNames) ? json_decode($rawNames, true) : (is_array($rawNames) ? $rawNames : []);
+    if (!is_array($containerNames)) {
+        $containerNames = [];
+    }
     $data = [];
     foreach ($containerNames as $name) {
-        $container = new Container($name);
+        $cleanName = sanitizeContainerName($name);
+        if ($cleanName === null) {
+            continue;
+        }
+        $container = new Container($cleanName);
         $cpu_usage = $container->cpu_usage;
         $memoryUse = $container->memoryUse;
         $ips = $container->ips;
         $totalBytes = $container->totalBytes;
-        $data[] = ['name' => $name, 'cpu_usage' => $cpu_usage, 'memoryUse' => $memoryUse, 'ips' => $ips, 'totalBytes' => $totalBytes];
+        $data[] = ['name' => $cleanName, 'cpu_usage' => $cpu_usage, 'memoryUse' => $memoryUse, 'ips' => $ips, 'totalBytes' => $totalBytes];
     }
     echo json_encode($data);
 }

@@ -48,13 +48,11 @@ class Settings {
 
     foreach ($activeContainers as $container) {
       exec('logger "LXC: Stopping container ' . $container . '"');
-      exec('lxc-stop --timeout='. $this->default_timeout . ' ' . $container . ' 2>/dev/null');
+      exec('lxc-stop --timeout='. (int)$this->default_timeout . ' ' . escapeshellarg($container) . ' 2>/dev/null');
       exec('logger "LXC: Container ' . $container . ' stopped"');
     }
 
-    if (substr($default_path, -1) == "/") {
-      $default_path = substr($default_path, 0, -1);
-    }
+    $default_path = rtrim($default_path, '/');
 
     setVariable('/boot/config/plugins/lxc/lxc.conf', 'lxc.lxcpath', $default_path);
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'BDEVTYPE', $default_bdevtype);
@@ -70,36 +68,44 @@ class Settings {
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_COMPRESSION', $backup_compression);
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_USE_SNAPSHOT', $backup_use_snapshot);
 
-    if (preg_match('/^(vhost|eth|bond)\d+$/', $interface)) {
-      exec('sed -i "/^lxc\.net\.0\.type/c lxc.net.0.type = macvlan" /boot/config/plugins/lxc/default.conf');
-      exec('sed -i "/^lxc\.net\.0\.link/c lxc.net.0.link = ' .$interface . '" /boot/config/plugins/lxc/default.conf');
-      if (strpos(file_get_contents('/boot/config/plugins/lxc/default.conf'), 'lxc.net.0.macvlan.mode = bridge') == false) {
-        exec('sed -i "/^lxc\.net\.0\.type/a lxc.net.0.macvlan.mode = bridge" /boot/config/plugins/lxc/default.conf');
-	    }
-    } else {
-      exec('sed -i "/^lxc\.net\.0\.type/c lxc.net.0.type = veth" /boot/config/plugins/lxc/default.conf');
-      exec('sed -i "/^lxc\.net\.0\.link/c lxc.net.0.link = ' . $interface . '" /boot/config/plugins/lxc/default.conf');
-      exec('sed -i "/^lxc\.net\.0\.macvlan\.mode/d" /boot/config/plugins/lxc/default.conf');
+    if (file_exists('/boot/config/plugins/lxc/default.conf')) {
+      if (preg_match('/^(vhost|eth|bond)\d+$/', $interface)) {
+        exec('sed -i "/^lxc\.net\.0\.type/c lxc.net.0.type = macvlan" /boot/config/plugins/lxc/default.conf');
+        exec('sed -i "/^lxc\.net\.0\.link/c lxc.net.0.link = ' . escapeshellarg($interface) . '" /boot/config/plugins/lxc/default.conf');
+        if (strpos(file_get_contents('/boot/config/plugins/lxc/default.conf'), 'lxc.net.0.macvlan.mode = bridge') === false) {
+          exec('sed -i "/^lxc\.net\.0\.type/a lxc.net.0.macvlan.mode = bridge" /boot/config/plugins/lxc/default.conf');
+        }
+      } else {
+        exec('sed -i "/^lxc\.net\.0\.type/c lxc.net.0.type = veth" /boot/config/plugins/lxc/default.conf');
+        exec('sed -i "/^lxc\.net\.0\.link/c lxc.net.0.link = ' . escapeshellarg($interface) . '" /boot/config/plugins/lxc/default.conf');
+        exec('sed -i "/^lxc\.net\.0\.macvlan\.mode/d" /boot/config/plugins/lxc/default.conf');
+      }
     }
 
     if ($change_net_containers == 'on' ) {
       foreach ($availContainers as $container) {
+        $contConfig = $default_path . '/' . $container->name . '/config';
+        if (!file_exists($contConfig)) {
+          continue;
+        }
         if (preg_match('/^(vhost|eth|bond)\d+$/', $interface)) {
-          exec('sed -i "/^lxc\.net\.0\.type/c lxc.net.0.type = macvlan" ' . $default_path . '/' . $container->name . '/config');
-          exec('sed -i "/^lxc\.net\.0\.link/c lxc.net.0.link = ' . $interface . '" ' . $default_path . '/' . $container->name . '/config');
-          if (strpos(file_get_contents($default_path . '/' . $container->name . '/config'), 'lxc.net.0.macvlan.mode = bridge') == false) {
-            exec('sed -i "/^lxc\.net\.0\.type/a lxc.net.0.macvlan.mode = bridge" ' . $default_path . '/' . $container->name . '/config');
+          exec('sed -i "/^lxc\.net\.0\.type/c lxc.net.0.type = macvlan" ' . escapeshellarg($contConfig));
+          exec('sed -i "/^lxc\.net\.0\.link/c lxc.net.0.link = ' . escapeshellarg($interface) . '" ' . escapeshellarg($contConfig));
+          if (strpos(file_get_contents($contConfig), 'lxc.net.0.macvlan.mode = bridge') === false) {
+            exec('sed -i "/^lxc\.net\.0\.type/a lxc.net.0.macvlan.mode = bridge" ' . escapeshellarg($contConfig));
           }
         } else {
-          exec('sed -i "/^lxc\.net\.0\.type/c lxc.net.0.type = veth" ' . $default_path . '/' . $container->name . '/config');
-          exec('sed -i "/^lxc\.net\.0\.link/c lxc.net.0.link = ' . $interface . '" ' . $default_path . '/' . $container->name . '/config');
-          exec('sed -i "/^lxc\.net\.0\.macvlan\.mode/d" ' . $default_path . '/' . $container->name . '/config');
+          exec('sed -i "/^lxc\.net\.0\.type/c lxc.net.0.type = veth" ' . escapeshellarg($contConfig));
+          exec('sed -i "/^lxc\.net\.0\.link/c lxc.net.0.link = ' . escapeshellarg($interface) . '" ' . escapeshellarg($contConfig));
+          exec('sed -i "/^lxc\.net\.0\.macvlan\.mode/d" ' . escapeshellarg($contConfig));
         }
       }
     }
   
-    if (is_dir('/var/cache/lxc')) {
+    if (is_link('/var/cache/lxc')) {
       unlink('/var/cache/lxc');
+    } elseif (is_dir('/var/cache/lxc')) {
+      exec('rm -rf /var/cache/lxc');
     }
 
     if (!is_dir($default_path . '/cache')) {
@@ -107,27 +113,35 @@ class Settings {
     }
 
     if (!is_file('/etc/lxc/default.conf')) {
-      symlink( "/boot/config/plugins/lxc/default.conf", "/etc/lxc/default.conf");
+      @symlink("/boot/config/plugins/lxc/default.conf", "/etc/lxc/default.conf");
     }
 
     if (!is_file('/etc/lxc/lxc.conf')) {
-      symlink("/boot/config/plugins/lxc/lxc.conf", "/etc/lxc/lxc.conf");
+      @symlink("/boot/config/plugins/lxc/lxc.conf", "/etc/lxc/lxc.conf");
     }
 
-    symlink($default_path . "/cache/", "/var/cache/lxc");
+    if (!file_exists('/var/cache/lxc') && !is_link('/var/cache/lxc')) {
+      @symlink($default_path . "/cache/", "/var/cache/lxc");
+    }
 
-    $service_status = parse_ini_file('/boot/config/plugins/lxc/plugin.cfg')['SERVICE'];
+    $cfg = @parse_ini_file('/boot/config/plugins/lxc/plugin.cfg');
+    $service_status = $cfg['SERVICE'] ?? '';
     if ($started == "enabled" && $service_status == "enabled") {
       exec('lxc-autostart');
     }
 
-    if ($service_status == "enabled") {
-      chmod("/usr/local/emhttp/plugins/lxc/system/LXC_usage", 0755);
-    } else {
-      chmod("/usr/local/emhttp/plugins/lxc/system/LXC_usage", 0644);
+    if (file_exists('/usr/local/emhttp/plugins/lxc/system/LXC_usage')) {
+      if ($service_status == "enabled") {
+        chmod("/usr/local/emhttp/plugins/lxc/system/LXC_usage", 0755);
+      } else {
+        chmod("/usr/local/emhttp/plugins/lxc/system/LXC_usage", 0644);
+      }
     }
 
-    exec("sed -i '/^DOWNLOAD_SERVER=\"*/c\DOWNLOAD_SERVER=\"" . escapeshellarg($default_cont_url) . "\"' /usr/share/lxc/templates/lxc-download");
+    $clean_url = trim(str_replace(['"', "'", '\\', '`', '$', ';', "\n", "\r"], '', (string)$default_cont_url));
+    if (file_exists('/usr/share/lxc/templates/lxc-download')) {
+      exec("sed -i \"/^DOWNLOAD_SERVER=\\\"*/c\\DOWNLOAD_SERVER=\\\"" . $clean_url . "\\\"\" /usr/share/lxc/templates/lxc-download");
+    }
   }
 
   function changeMisc($timeout, $startdelay, $dynamic_stats, $default_cont_url) {
@@ -136,7 +150,10 @@ class Settings {
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'DYNAMIC_STATS', $dynamic_stats);
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_CONTAINER_URL', $default_cont_url);
 
-    exec("sed -i '/^DOWNLOAD_SERVER=\"*/c\DOWNLOAD_SERVER=\"" . escapeshellarg($default_cont_url) . "\"' /usr/share/lxc/templates/lxc-download");
+    $clean_url = trim(str_replace(['"', "'", '\\', '`', '$', ';', "\n", "\r"], '', (string)$default_cont_url));
+    if (file_exists('/usr/share/lxc/templates/lxc-download')) {
+      exec("sed -i \"/^DOWNLOAD_SERVER=\\\"*/c\\DOWNLOAD_SERVER=\\\"" . $clean_url . "\\\"\" /usr/share/lxc/templates/lxc-download");
+    }
   }
 
   function changeBackup($backup_enabled, $backup_path, $backup_keep, $backup_threads, $backup_compression, $backup_use_snapshot) {
@@ -146,9 +163,9 @@ class Settings {
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_THREADS', $backup_threads);
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_COMPRESSION', $backup_compression);
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_USE_SNAPSHOT', $backup_use_snapshot);
-    if (!file_exists($backup_path)) {
-     mkdir($backup_path);
-   }
+    if (!empty($backup_path) && !file_exists($backup_path)) {
+      mkdir($backup_path, 0755, true);
+    }
   }
 
 }

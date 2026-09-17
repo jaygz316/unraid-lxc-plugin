@@ -1,7 +1,13 @@
 #!/bin/bash
 # get versions
-CUR_V="$(lxc-info --version)"
-LAT_V="$(wget -qO- https://api.github.com/repos/ich777/unraid-lxc-plugin/releases/latest | jq -r '.tag_name')"
+CUR_V="$(lxc-info --version 2>/dev/null)"
+LAT_V="$(wget -qO- https://api.github.com/repos/jaygz316/unraid-lxc-plugin/releases/latest 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)"
+DL_BASE="https://github.com/jaygz316/unraid-lxc-plugin/releases/download"
+
+if [ -z "${LAT_V}" ] || [ "${LAT_V}" = "null" ]; then
+  LAT_V="$(wget -qO- https://api.github.com/repos/ich777/unraid-lxc-plugin/releases/latest 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)"
+  DL_BASE="https://github.com/ich777/unraid-lxc-plugin/releases/download"
+fi
 
 upgrade() {
   # set build index depending on unRAID version
@@ -15,7 +21,7 @@ $TARGET_V"
   fi
   
   # set download url
-  DL_URL="https://github.com/ich777/unraid-lxc-plugin/releases/download/$LAT_V"
+  DL_URL="${DL_BASE}/$LAT_V"
   
   # download LXC package
   if wget -q -nc --show-progress --progress=bar:force:noscroll -O "/boot/config/plugins/lxc/packages/LXC-${LAT_V}-${BUILD_IDX}.txz" "${DL_URL}/LXC-${LAT_V}-${BUILD_IDX}.txz" ; then

@@ -4,9 +4,24 @@ if ( window.history.replaceState ) {
 }
 
 function postAction(name, id) {
+  const validActions = [
+    'stopCONT', 'restartCONT', 'freezeCONT', 'killCONT', 'unfreezeCONT',
+    'startCONT', 'startALLCONT', 'stopALLCONT', 'freezeALLCONT', 'unfreezeALLCONT',
+    'destroyCONT', 'snapshotCONT', 'backupCONT', 'deleteSNAP', 'deleteBACKUP'
+  ];
+  let action = name;
+  if (typeof name === 'string') {
+    const classes = name.split(/\s+/);
+    const matched = validActions.find(function(act) { return classes.indexOf(act) !== -1; });
+    if (matched) {
+      action = matched;
+    } else {
+      action = classes[0];
+    }
+  }
   let postData = {
-    'lxc'   : '',
-    'action'     : name,
+    'lxc'      : '',
+    'action'   : action,
     'container': id
   };
   $.post("/plugins/lxc/include/ajax.php", postData).done(function(response){
@@ -15,14 +30,32 @@ function postAction(name, id) {
 }
 
 function saveConfig(name) {
-  swal({
-    title: "Saving",
-    text: "Saving configuration for LXC container: <span style=\"font-weight:bold\">" + name + "</span>, please wait...",
-    closeOnEsc: false,
-    showConfirmButton: false,
-    allowOutsideClick: false,
-    html: true
-  });
+  const isSwal2 = (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') ||
+                  (typeof swal !== 'undefined' && typeof swal.fire === 'function');
+  if (isSwal2) {
+    const swalObj = (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') ? Swal : swal;
+    swalObj.fire({
+      title: "Saving",
+      html: "Saving configuration for LXC container: <span style=\"font-weight:bold\">" + name + "</span>, please wait...",
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      didOpen: function() {
+        if (typeof swalObj.showLoading === 'function') {
+          swalObj.showLoading();
+        }
+      }
+    });
+  } else if (typeof swal === 'function') {
+    swal({
+      title: "Saving",
+      text: "Saving configuration for LXC container: <span style=\"font-weight:bold\">" + name + "</span>, please wait...",
+      closeOnEsc: false,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      html: true
+    });
+  }
   let updatedConfig = $('#configEditor').val();
   $.ajax({
     type: "POST",
@@ -61,33 +94,108 @@ function waitForElement(elementPath, callBack){
 }
 
 // Function that shows the dialog
-function showDialog(callback, text) {
-  swal({
-    title:"Proceed?",
-    text: text,
-    type:'warning',
-    html:true,
-    showCancelButton:true,
-    confirmButtonText: "Proceed",
-    cancelButtonText:"Cancel"
-  },
-  function(confirm){
-    callback(confirm);
-  });
+function showDialog(callback, text, title) {
+  title = title || "Proceed?";
+  const isSwal2 = (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') ||
+                  (typeof swal !== 'undefined' && typeof swal.fire === 'function');
+  if (isSwal2) {
+    const swalObj = (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') ? Swal : swal;
+    swalObj.fire({
+      title: title,
+      html: text,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: "Proceed",
+      cancelButtonText: "Cancel"
+    }).then(function(result) {
+      if (typeof callback === 'function') {
+        callback(result.isConfirmed || result.value === true);
+      }
+    });
+  } else if (typeof swal === 'function') {
+    var res = swal({
+      title: title,
+      text: text,
+      type: 'warning',
+      html: true,
+      showCancelButton: true,
+      confirmButtonText: "Proceed",
+      cancelButtonText: "Cancel"
+    },
+    function(confirm){
+      if (typeof callback === 'function') {
+        callback(confirm);
+      }
+    });
+    if (res && typeof res.then === 'function') {
+      res.then(function(result) {
+        if (typeof callback === 'function') {
+          callback(result.isConfirmed || result.value === true);
+        }
+      });
+    }
+  } else {
+    var strippedText = (text || '').replace(/<[^>]*>?/gm, '');
+    var confirmed = confirm(strippedText || title);
+    if (typeof callback === 'function') {
+      callback(confirmed);
+    }
+  }
 }
 
 function showPrompt(callback, title, text, placeholder) {
-  swal({
-    title: title,
-    text: text,
-    type: "input",
-    showCancelButton: true,
-    closeOnConfirm: true,
-    inputPlaceholder: placeholder
-  },
-  function(confirm) {
-    callback(confirm);
-  });
+  const isSwal2 = (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') ||
+                  (typeof swal !== 'undefined' && typeof swal.fire === 'function');
+  if (isSwal2) {
+    const swalObj = (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') ? Swal : swal;
+    swalObj.fire({
+      title: title,
+      text: text,
+      input: 'text',
+      inputPlaceholder: placeholder,
+      showCancelButton: true,
+      confirmButtonText: "OK",
+      cancelButtonText: "Cancel"
+    }).then(function(result) {
+      if (typeof callback === 'function') {
+        if (result.isConfirmed) {
+          callback(result.value !== undefined ? result.value : "");
+        } else {
+          callback(false);
+        }
+      }
+    });
+  } else if (typeof swal === 'function') {
+    var res = swal({
+      title: title,
+      text: text,
+      type: "input",
+      showCancelButton: true,
+      closeOnConfirm: true,
+      inputPlaceholder: placeholder
+    },
+    function(confirm) {
+      if (typeof callback === 'function') {
+        callback(confirm);
+      }
+    });
+    if (res && typeof res.then === 'function') {
+      res.then(function(result) {
+        if (typeof callback === 'function') {
+          if (result.isConfirmed) {
+            callback(result.value !== undefined ? result.value : "");
+          } else {
+            callback(false);
+          }
+        }
+      });
+    }
+  } else {
+    var val = prompt((title ? title + "\n" : "") + text, "");
+    if (typeof callback === 'function') {
+      callback(val !== null ? val : false);
+    }
+  }
 }
 
 // Prevent closing shadowbox when editing config
@@ -155,7 +263,20 @@ function showStatus(action, id, title, text) {
 
 function showDropdown(contName) {
   setTimeout(function() {
-    document.getElementById("dropdown_" + contName).classList.toggle("show_lxc");
+    var menu = document.getElementById("dropdown_" + contName);
+    if (!menu) return;
+    menu.classList.toggle("show_lxc");
+    if (menu.classList.contains("show_lxc")) {
+      var rect = menu.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        menu.style.left = "auto";
+        menu.style.right = "0";
+      }
+      if (rect.left < 0) {
+        menu.style.left = "0";
+        menu.style.right = "auto";
+      }
+    }
   }, 100);
 }
 
@@ -370,28 +491,19 @@ $(function() {
     let id = this.id.split(" ")[0];
     let snapshot = this.id.split(" ")[1];
 
-    swal({
-        title: "Proceed?",
-        text: "<span style=\"color:red;font-weight:bold;\">ATTENTION</span><br/>Do you really want to destroy this Snapshot? This is IRREVERSIBLE and will delete the snapshot and all data in it!",
-        type: 'warning',
-        html: true,
-        showCancelButton: true,
-        confirmButtonText: "Proceed",
-        cancelButtonText: "Cancel"
-      },
-      function (p) {
-        if (p) {
-          let postData = {
-            'lxc'   : '',
-            'action'     : 'deleteSNAP',
-            'container': id,
-            'snapshot': snapshot
-          };
-          $.post("/plugins/lxc/include/ajax.php", postData).done(function(){
-            parent.window.location.reload();
-          });
-        }
-      });
+    showDialog(function (confirmed) {
+      if (confirmed) {
+        let postData = {
+          'lxc'      : '',
+          'action'   : 'deleteSNAP',
+          'container': id,
+          'snapshot' : snapshot
+        };
+        $.post("/plugins/lxc/include/ajax.php", postData).done(function(){
+          parent.window.location.reload();
+        });
+      }
+    }, "<span style=\"color:red;font-weight:bold;\">ATTENTION</span><br/>Do you really want to destroy this Snapshot? This is IRREVERSIBLE and will delete the snapshot and all data in it!");
   });
 
   // Listener for deleting backups
@@ -399,28 +511,19 @@ $(function() {
     let id = this.id.split(" ")[0];
     let backup = this.id.split(" ")[1];
 
-    swal({
-        title: "Proceed?",
-        text: "<span style=\"color:red;font-weight:bold;\">ATTENTION</span><br/>Do you really want to delete this backup? This is IRREVERSIBLE and will delete the backup!",
-        type: 'warning',
-        html: true,
-        showCancelButton: true,
-        confirmButtonText: "Proceed",
-        cancelButtonText: "Cancel"
-      },
-      function (p) {
-        if (p) {
-          let postData = {
-            'lxc'   : '',
-            'action'     : 'deleteBACKUP',
-            'container': id,
-            'backup': backup
-          };
-          $.post("/plugins/lxc/include/ajax.php", postData).done(function(){
-            parent.window.location.reload();
-          });
-        }
-      });
+    showDialog(function (confirmed) {
+      if (confirmed) {
+        let postData = {
+          'lxc'      : '',
+          'action'   : 'deleteBACKUP',
+          'container': id,
+          'backup'   : backup
+        };
+        $.post("/plugins/lxc/include/ajax.php", postData).done(function(){
+          parent.window.location.reload();
+        });
+      }
+    }, "<span style=\"color:red;font-weight:bold;\">ATTENTION</span><br/>Do you really want to delete this backup? This is IRREVERSIBLE and will delete the backup!");
   });
 
   // Listener for restoring from snapshot form
@@ -623,13 +726,13 @@ $(function() {
           },
           success: function(data) {
             let dialogContent = $("#dialogContent");
-            dialogContent.append('<textarea id="configEditor" style="width: 800px; height: 600px; margin: 0 auto; display: block; background-color: white; color: black; z-index: 9999; border: 1px solid #ccc; padding: 10px;">' + data + '</textarea>');
+            dialogContent.append('<textarea id="configEditor" style="width: 100%; max-width: 800px; height: 600px; margin: 0 auto; display: block; padding: 10px; font-family: monospace; box-sizing: border-box;">' + data + '</textarea>');
             dialogContent.append('<p class="centered" style="color: red;">WARNING: Saving the configuration will restart a running container!</p>');
             dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="saveConfig(\'' + container + '\')">Save</button><button class="logLine" type="button" onclick="top.Shadowbox.close();">Done</button></p>');
           }
         });
       });
-    } else if ($(e.target).attr("class") === "btn_dropdown") {
+    } else if ($(e.target).closest(".btn_dropdown, .dropdown_btn").length > 0) {
       var dropdowns = document.getElementsByClassName("dropdown-menu");
       for (var i = 0; i < dropdowns.length; i++) {
         var openDropdown = dropdowns[i];
@@ -653,7 +756,7 @@ $(function() {
   });
 
   $(document).mouseup(function (e) {
-    if ($(e.target).closest(".btn_dropdown").length === 0) {
+    if ($(e.target).closest(".btn_dropdown, .dropdown_btn, .dropdown-menu").length === 0) {
       $('.dropdown-menu').removeClass('show_lxc');
     }
   });

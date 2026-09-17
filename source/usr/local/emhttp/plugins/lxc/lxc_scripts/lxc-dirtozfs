@@ -12,7 +12,7 @@ function show_help {
   echo "  -q, --quiet  Quiet mode - no questions asked, be careful with that!"
   echo "  -h, --help   Display this help message"
   echo
-  echo "lxc-dirtozfs by Christoph Hummer v2023.10.03"
+  echo "lxc-dirtozfs v2026.09.17"
 }
 
 # Check if correct arguments are passed over and if container name is provided
@@ -67,8 +67,8 @@ if echo "${ZFS_DATASETS}" | grep -wq "${CONTAINER_DATASET}" ; then
 fi
 
 # Check if mountpoint is ZFS
-if [ "$(df -T ${ZFS_POOL} | awk 'NR==2 {print $2}')" != "zfs" ]; then
-  echo "Mount point ${ZFS_POOL} is not ZFS, abort!"
+if [ "$(df -T ${LXC_PATH} | awk 'NR==2 {print $2}')" != "zfs" ]; then
+  echo "Mount point ${LXC_PATH} is not ZFS, abort!"
   exit 1
 fi
 
@@ -101,7 +101,7 @@ CONT_SIZE=$(du -s ${LXC_PATH}/${CONT_NAME}/rootfs | awk '{print $1}')
 REQU_SPACE=$((${CONT_SIZE} * 2 + 100*1024))
 
 if [ "${AVAIL_SPACE}" -le "${REQU_SPACE}" ]; then
-  echo "Not enough free space on ${ZFS_POOL}, abort!"
+  echo "Not enough free space on ${LXC_PATH}, abort!"
   exit 1
 fi
 
@@ -143,15 +143,21 @@ if [ $? != 0 ]; then
   exit 1
 fi
 
+# Verify source before deleting, avoiding data loss on interruption
+if [ ! -f "${LXC_PATH}/cache/dirtozfs/${CONT_NAME}/config" ] || [ ! -d "${LXC_PATH}/cache/dirtozfs/${CONT_NAME}/rootfs" ]; then
+  echo "Verification failed: cached container files missing! Aborting to avoid data loss."
+  exit 1
+fi
+
 # Remove original container directory
 rm -rf ${LXC_PATH}/${CONT_NAME}
 
 # Create ZFS dataset
 echo "Creating ZFS dataset..."
-zfs create -o mountpoint=${LXC_PATH}/${CONT_NAME}/rootfs -p ${CONTAINER_DATASET}/${CONT_NAME}
+zfs create -o mountpoint=${LXC_PATH}/${CONT_NAME}/rootfs -p ${CONTAINER_DATASET}
 if [ $? != 0 ]; then
   echo "Failed to create ZFS dataset for rootfs!"
-  rm -rf ${LXC_PATH}/cache/dirtozfs/${CONT_NAME}/${CONT_NAME}
+  echo "Original container files are preserved in ${LXC_PATH}/cache/dirtozfs/${CONT_NAME}"
   exit 1
 fi
 
@@ -161,7 +167,7 @@ rsync -a ${LXC_PATH}/cache/dirtozfs/${CONT_NAME}/config ${LXC_PATH}/${CONT_NAME}
 rsync -a ${LXC_PATH}/cache/dirtozfs/${CONT_NAME}/rootfs/ ${LXC_PATH}/${CONT_NAME}/rootfs/
 
 # Change container config to support zfs
-sed -i "s/^lxc\.rootfs\.path.*/lxc\.rootfs\.path = zfs:${CONTAINER_DATASET//\//\\/}\/${CONT_NAME//./\\.}/" ${LXC_PATH}/${CONT_NAME}/config
+sed -i "s|^lxc\.rootfs\.path.*|lxc.rootfs.path = zfs:${CONTAINER_DATASET//\//\\/}|" ${LXC_PATH}/${CONT_NAME}/config
 
 # Remove temporary directory
 echo "Cleaning up..."
